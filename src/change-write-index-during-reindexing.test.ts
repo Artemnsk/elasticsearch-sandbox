@@ -7,8 +7,7 @@ const INDEX_WILDCARD = 'test_index*'
 
 /**
  * CONCLUSION.
- * This test fails!
- * Inevitably, we have at least one document lost when reassigning a write index for the alias.
+ * It is important to wait for a while before reindexing once you changed the write index for alias!
  */
 describe('Indexes API usage case', () => {
   afterEach(async () => {
@@ -23,7 +22,7 @@ describe('Indexes API usage case', () => {
     await client.indices.putAlias({ name: ALIAS, index: INDEX_1, body: { is_write_index: true } })
   })
 
-  test('You can create new writing index, run reindex and loose not that much data in between.', async () => {
+  test('You can create new writing index, run reindex and do not loose any data in between.', async () => {
     const document = { content: 'something2' }
 
     // Just imagine that we already had something there to have more illustrative test scenario.
@@ -32,7 +31,7 @@ describe('Indexes API usage case', () => {
       await client.index({ require_alias: true, index: ALIAS, body: document })
     }
 
-    let problematicDocId: null | string = null
+    let problematicDocsExist = false
     let WRITTEN_IN_INTERVAL = 0
     function writeInInterval(intervalMs: number) {
       const MAX_ATTEMPTS = 100
@@ -40,11 +39,8 @@ describe('Indexes API usage case', () => {
       function singleWrite() {
         let newPromise = client.index({ require_alias: true, index: ALIAS, body: document })
           .then(r => {
-            const { _id, _index } = r.body
-            if (_index === INDEX_1) {
-              expect(problematicDocId).toBe(null)
-              // As expected, document the first doc was written into old index.
-              problematicDocId = _id
+            if (r.body._index === INDEX_1) {
+              problematicDocsExist = true
             }
           })
           .catch((e) => {
@@ -55,7 +51,11 @@ describe('Indexes API usage case', () => {
         WRITTEN_IN_INTERVAL++
       }
 
-      // Immediately make the first write to test the most "edge" case.
+      // Immediately make the first writes to test the most "edge" case.
+      singleWrite()
+      singleWrite()
+      singleWrite()
+      singleWrite()
       singleWrite()
       const interval = setInterval(() => {
         singleWrite()
@@ -95,6 +95,9 @@ describe('Indexes API usage case', () => {
         ],
       },
     })
+    // IMPORTANT!
+    // It appeared very crucial to wait before reindexing!
+    await new Promise(r => setTimeout(r, 1_000))
     await client.reindex({
       wait_for_completion: true,
       body: {
@@ -103,6 +106,7 @@ describe('Indexes API usage case', () => {
       },
     })
     await stopParallelWritingToIndex1()
+    expect(problematicDocsExist).toBeTruthy()
     // It needs some time for last indexed documents to appear in the search.
     await new Promise(r => setTimeout(r, 2_000))
 
@@ -123,23 +127,6 @@ describe('Indexes API usage case', () => {
       },
     })
     // Everything, except that problematic doc.
-    expect(searchResultIndex2.body.hits.hits.length).toBe(totalDocumentsNumber - 1)
-
-    const searchResultIndex1 = await client.search({
-      index: INDEX_1,
-      body: {
-        size: PRE_RUN_NODES_NUMBER + 2,
-        query: {
-          multi_match: {
-            query: 'something',
-            fields: ['content'],
-            type: 'phrase_prefix',
-          },
-        },
-      },
-    })
-    // The problematic doc is still there.
-    expect(searchResultIndex1.body.hits.hits.length).toBe(PRE_RUN_NODES_NUMBER + 1)
-    expect(searchResultIndex1.body.hits.hits.some((doc: any) => doc._id === problematicDocId)).toBeTruthy()
+    expect(searchResultIndex2.body.hits.hits.length).toBe(totalDocumentsNumber)
   })
 })

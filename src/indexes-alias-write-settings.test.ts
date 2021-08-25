@@ -5,11 +5,12 @@ const INDEX_1 = 'test_index_1'
 const INDEX_2 = 'test_index_2'
 const INDEX_WILDCARD = 'test_index*'
 
-describe('Indexes API usage cases', () => {
+describe('Indexes API usage case', () => {
   afterEach(async () => {
-    await client.indices.deleteAlias({ name: ALIAS, index: INDEX_WILDCARD }).catch()
-    await client.indices.delete({ index: INDEX_1 }).catch()
-    await client.indices.delete({ index: INDEX_2 }).catch()
+    const emptyCb = () => {}
+    await client.indices.deleteAlias({ name: ALIAS, index: INDEX_WILDCARD }).catch(emptyCb)
+    await client.indices.delete({ index: INDEX_1 }).catch(emptyCb)
+    await client.indices.delete({ index: INDEX_2 }).catch(emptyCb)
   })
 
   test('You can create indexes, assign them to alias and update writing settings.', async () => {

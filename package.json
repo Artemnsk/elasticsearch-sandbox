@@ -1,0 +1,10 @@
+{
+  "name": "elasticsearch-sandbox",
+  "version": "1.0.0",
+  "description": "The codebase of functionality tests for elasticsearch",
+  "main": "src/index.js",
+  "repository": "https://github.com/Artemnsk/elasticsearch-sandbox.git",
+  "author": "Artemnsk <shelkov1991@gmail.com>",
+  "license": "MIT",
+  "private": false
+}

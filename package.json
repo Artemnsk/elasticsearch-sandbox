@@ -2,9 +2,17 @@
   "name": "elasticsearch-sandbox",
   "version": "1.0.0",
   "description": "The codebase of functionality tests for elasticsearch",
-  "main": "src/index.js",
   "repository": "https://github.com/Artemnsk/elasticsearch-sandbox.git",
   "author": "Artemnsk <shelkov1991@gmail.com>",
   "license": "MIT",
-  "private": false
+  "private": false,
+  "scripts": {
+    "start": "jest"
+  },
+  "dependencies": {
+    "@types/jest": "^27.0.1",
+    "jest": "^27.0.6",
+    "ts-jest": "^27.0.5",
+    "typescript": "^4.3.5"
+  }
 }

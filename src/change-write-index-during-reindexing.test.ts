@@ -19,17 +19,12 @@ describe('Indexes API usage case', () => {
   })
 
   beforeEach(async () => {
-    const emptyCb = () => {}
-    await client.indices.deleteAlias({ name: ALIAS, index: INDEX_WILDCARD }).catch(emptyCb)
-    await client.indices.delete({ index: INDEX_1 }).catch(emptyCb)
-    await client.indices.delete({ index: INDEX_2 }).catch(emptyCb)
-
     await client.indices.create({ index: INDEX_1 })
     await client.indices.putAlias({ name: ALIAS, index: INDEX_1, body: { is_write_index: true } })
   })
 
-  test('You can create new writing index, run reindex and do not loose any data in between.', async () => {
-    const document = { content: 'something' }
+  test('You can create new writing index, run reindex and loose not that much data in between.', async () => {
+    const document = { content: 'something2' }
 
     // Just imagine that we already had something there to have more illustrative test scenario.
     const PRE_RUN_NODES_NUMBER = 5
@@ -37,13 +32,22 @@ describe('Indexes API usage case', () => {
       await client.index({ require_alias: true, index: ALIAS, body: document })
     }
 
+    let problematicDocId: null | string = null
     let WRITTEN_IN_INTERVAL = 0
     function writeInInterval(intervalMs: number) {
       const MAX_ATTEMPTS = 100
       let promise: Promise<any> = Promise.resolve()
       function singleWrite() {
         let newPromise = client.index({ require_alias: true, index: ALIAS, body: document })
-          .catch(() => {
+          .then(r => {
+            const { _id, _index } = r.body
+            if (_index === INDEX_1) {
+              expect(problematicDocId).toBe(null)
+              // As expected, document the first doc was written into old index.
+              problematicDocId = _id
+            }
+          })
+          .catch((e) => {
             WRITTEN_IN_INTERVAL--
             console.error('Document was not written to index, decrement WRITTEN_IN_INTERVAL.')
           })
@@ -105,7 +109,7 @@ describe('Indexes API usage case', () => {
     const totalDocumentsNumber = PRE_RUN_NODES_NUMBER + WRITTEN_IN_INTERVAL
     console.info('Total documents written during this test is ', totalDocumentsNumber)
 
-    const searchResult = await client.search({
+    const searchResultIndex2 = await client.search({
       index: INDEX_2,
       body: {
         size: totalDocumentsNumber + 1,
@@ -118,6 +122,24 @@ describe('Indexes API usage case', () => {
         },
       },
     })
-    expect(searchResult.body.hits.hits.length).toBe(totalDocumentsNumber)
+    // Everything, except that problematic doc.
+    expect(searchResultIndex2.body.hits.hits.length).toBe(totalDocumentsNumber - 1)
+
+    const searchResultIndex1 = await client.search({
+      index: INDEX_1,
+      body: {
+        size: PRE_RUN_NODES_NUMBER + 2,
+        query: {
+          multi_match: {
+            query: 'something',
+            fields: ['content'],
+            type: 'phrase_prefix',
+          },
+        },
+      },
+    })
+    // The problematic doc is still there.
+    expect(searchResultIndex1.body.hits.hits.length).toBe(PRE_RUN_NODES_NUMBER + 1)
+    expect(searchResultIndex1.body.hits.hits.some((doc: any) => doc._id === problematicDocId)).toBeTruthy()
   })
 })

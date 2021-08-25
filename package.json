@@ -7,7 +7,7 @@
   "license": "MIT",
   "private": false,
   "scripts": {
-    "start": "jest"
+    "test": "jest"
   },
   "dependencies": {
     "@elastic/elasticsearch": "^7.14.0",

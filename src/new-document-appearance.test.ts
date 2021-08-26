@@ -17,7 +17,7 @@ describe('Search API usage case', () => {
     await client.indices.create({ index: INDEX })
   })
 
-  const cases: Array<[string, number, boolean]> = [
+  const indexingCases: Array<[string, number, boolean]> = [
     [
       'Searching for a just indexed item immediately will not respond it.',
       0,
@@ -33,7 +33,7 @@ describe('Search API usage case', () => {
     ],
   ]
 
-  test.each(cases)('%s', async (_, waitTimeMs, hasResult) => {
+  test.each(indexingCases)('%s', async (_, waitTimeMs, hasResult) => {
     const document = { content: 'something2' }
 
     const indexResult = await client.index({ index: INDEX, body: document })
@@ -70,7 +70,7 @@ describe('Search API usage case', () => {
       body: {
         script: {
           source: `
-            if (!ctx._source.fruits.contains(params.fruitToAdd)){ 
+            if (!ctx._source.fruits.contains(params.fruitToAdd)){
               ctx._source.fruits.add(params.fruitToAdd)
             }
           `,
@@ -102,5 +102,85 @@ describe('Search API usage case', () => {
     const { hits } = searchResult.body.hits
     expect(hits.length).toBe(1)
     expect(hits[0]._source.fruits).toEqual(['apple', 'orange'])
+  })
+
+  const updateCases: Array<[string, number, (createdResultsCounter: number) => void]> = [
+    [
+      'Spam updates - works fine if delay between update ops is huge enough.',
+      100,
+      counter => expect(counter).toBe(1)
+    ], [
+      'Spam updates - multiple `create` ops throw error if delay between update ops is too small.',
+      10,
+      counter => expect(counter).toBeGreaterThan(1)
+    ],
+  ]
+
+  test.each(updateCases)('%s', async (_, delayMs, expectation) => {
+    const DOCUMENT_ID = 'document_id'
+    const defaultFruits = [
+      'apple',
+    ]
+    const fruitsToAdd = [
+      'orange',
+      'banana',
+      'mango',
+      'peanut',
+      // Is it actually a fruit? Maybe a berry?
+      'watermelon',
+    ]
+    const promises: Promise<any>[] = []
+    let createdResultsCounter = 0
+    for (const fruitToAdd of fruitsToAdd) {
+      const promise = client.update({
+        index: INDEX,
+        id: DOCUMENT_ID,
+        body: {
+          script: {
+            source: `
+            if (!ctx._source.fruits.contains(params.fruitToAdd)){ 
+              ctx._source.fruits.add(params.fruitToAdd)
+            }
+          `,
+            lang: 'painless',
+            params: { fruitToAdd }
+          },
+          upsert: {
+            fruits: ['apple', fruitToAdd],
+          }
+        },
+      }).then(r => {
+        if (r === null) return
+        if (r.body.result === 'created') {
+          createdResultsCounter++
+        }
+      }, e => {
+        console.error(e.toString())
+        createdResultsCounter++
+      })
+      promises.push(promise)
+      await new Promise(r => setTimeout(r, delayMs))
+    }
+    await Promise.all(promises)
+    expectation(createdResultsCounter)
+
+    await new Promise(r => setTimeout(r, 1000))
+
+    const searchResult = await client.search({
+      index: INDEX,
+      body: {
+        query: {
+          multi_match: {
+            query: 'apple',
+            fields: ['fruits'],
+            type: 'phrase_prefix',
+          },
+        },
+      },
+    })
+
+    const { hits } = searchResult.body.hits
+    expect(hits.length).toBe(1)
+    expect(hits[0]._source.fruits.sort()).toEqual([...defaultFruits, ...fruitsToAdd].sort())
   })
 })

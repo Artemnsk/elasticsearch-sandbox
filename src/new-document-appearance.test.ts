@@ -57,7 +57,7 @@ describe('Search API usage case', () => {
     expect(searchResult.body.hits.hits.length > 0).toBe(hasResult)
   })
 
-  test('Write and immediately update then - changes should be applied properly.', async () => {
+  test('Write and update after getting the response back then - changes should be applied properly.', async () => {
     const document = { fruits: ['apple'] }
 
     const indexResult = await client.index({ index: INDEX, body: document })

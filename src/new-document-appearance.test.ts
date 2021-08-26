@@ -146,7 +146,7 @@ describe('Search API usage case', () => {
             params: { fruitToAdd }
           },
           upsert: {
-            fruits: ['apple', fruitToAdd],
+            fruits: [...defaultFruits, fruitToAdd],
           }
         },
       }).then(r => {

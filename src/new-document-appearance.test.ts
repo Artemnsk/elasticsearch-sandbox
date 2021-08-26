@@ -56,4 +56,51 @@ describe('Search API usage case', () => {
 
     expect(searchResult.body.hits.hits.length > 0).toBe(hasResult)
   })
+
+  test('Write and immediately update then - changes should be applied properly.', async () => {
+    const document = { fruits: ['apple'] }
+
+    const indexResult = await client.index({ index: INDEX, body: document })
+    const { _id, result } = indexResult.body
+    expect(result).toBe('created')
+
+    const updateResult = await client.update({
+      index: INDEX,
+      id: _id,
+      body: {
+        script: {
+          source: `
+            if (!ctx._source.fruits.contains(params.fruitToAdd)){ 
+              ctx._source.fruits.add(params.fruitToAdd)
+            }
+          `,
+          lang: 'painless',
+          params: {
+            fruitToAdd: 'orange',
+          }
+        },
+      },
+    })
+
+    expect(updateResult.body.result).toBe('updated')
+
+    await new Promise(r => setTimeout(r, 1000))
+
+    const searchResult = await client.search({
+      index: INDEX,
+      body: {
+        query: {
+          multi_match: {
+            query: 'orange',
+            fields: ['fruits'],
+            type: 'phrase_prefix',
+          },
+        },
+      },
+    })
+
+    const { hits } = searchResult.body.hits
+    expect(hits.length).toBe(1)
+    expect(hits[0]._source.fruits).toEqual(['apple', 'orange'])
+  })
 })

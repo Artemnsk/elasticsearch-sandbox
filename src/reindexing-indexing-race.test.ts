@@ -10,7 +10,7 @@ describe('Indexes API usage case', () => {
     await client.indices.delete({ index: INDEX_2 }).catch(emptyCb)
   })
 
-  test('You can create indexes, assign them to alias and update writing settings.', async () => {
+  test('Reindex API\'s op_type=create option makes re-indexed entities not overwrite existing values in destination index.', async () => {
     await client.indices.create({ index: INDEX_1 })
     await client.indices.create({ index: INDEX_2 })
 

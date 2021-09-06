@@ -21,7 +21,7 @@ async function searchDocs(query: string) {
 const DOCUMENT_ID = 'doc_id'
 const originalDocument = { field1: 'field1 something', field2: 'field2 something' }
 
-describe('Update API usage cases', () => {
+describe('Update/Index API usage cases', () => {
   afterEach(async () => {
     const emptyCb = () => {}
     await client.indices.delete({ index: INDEX }).catch(emptyCb)
@@ -71,5 +71,21 @@ describe('Update API usage cases', () => {
       field2: 'field2 something 2',
       field3: 'field3 something',
     })
+  })
+
+  it('`index()` should fully replace an existing document without any fields merging', async () => {
+    await client.index({ index: INDEX, id: DOCUMENT_ID, body: originalDocument })
+
+    await client.index({
+      index: INDEX,
+      id: DOCUMENT_ID,
+      refresh: true,
+      body: { field2: 'field2 something 2', field3: 'field3 something' },
+    })
+
+    const hits = await searchDocs('something')
+
+    expect(hits.length).toBe(1)
+    expect(hits[0]._source).toMatchObject({ field2: 'field2 something 2', field3: 'field3 something' })
   })
 })

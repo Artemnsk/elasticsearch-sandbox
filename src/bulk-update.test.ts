@@ -63,6 +63,7 @@ describe('Indexes API usage case', () => {
     })
 
     expect(bulkResponse.body.errors).toBe(true)
+    expect(bulkResponse.body.items[0].update.error).toBe(undefined)
     expect(bulkResponse.body.items[2]).toStrictEqual({
       create: expect.objectContaining({
         error: expect.objectContaining({
